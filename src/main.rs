@@ -1,7 +1,6 @@
 fn main() {
     let sample_irc_message =
         "@id=234AB;test=;keywithnovalue; :dan!d@localhost PRIVMSG #chan :Hey what's up!\r\n";
-    //
     let (tag_string, _message) = get_tag_substring(sample_irc_message);
 
     let tags = get_tags(tag_string);
@@ -19,7 +18,7 @@ enum IRCMessageToken<'a> {
 
 fn get_tag_substring<'a>(message: &'a str) -> (&'a str, &'a str) {
     if let Some(pos) = message.find(' ') {
-        return (&message[..pos], &message[pos..]);
+        return (&message[..pos], &message[pos + ' '.len_utf8()..]);
     }
 
     ("", message)
@@ -48,4 +47,55 @@ fn create_token<'a>(message: &'a str) -> Option<IRCMessageToken> {
     }
 
     Some(IRCMessageToken::Tag(kvps[0], kvps[1]))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{create_token, get_tag_substring, get_tags, IRCMessageToken};
+
+    #[test]
+    fn get_tag_substring_from_string() {
+        let token_string =
+            "@id=234AB;test=;keywithnovalue; :dan!d@localhost PRIVMSG #chan :Hey what's up!\r\n";
+        let (tag_string, remainder) = get_tag_substring(token_string);
+        assert_eq!(tag_string, "@id=234AB;test=;keywithnovalue;");
+        assert_eq!(
+            remainder,
+            ":dan!d@localhost PRIVMSG #chan :Hey what's up!\r\n"
+        );
+    }
+
+    #[test]
+    fn create_tag_token_from_string() {
+        let token_string = "@id=234AB";
+        let IRCMessageToken::Tag(key, value) = create_token(token_string).unwrap();
+        assert_eq!(key, "@id");
+        assert_eq!(value, "234AB");
+    }
+
+    #[test]
+    fn create_tag_token_from_empty_string() {
+        let token_string = "";
+        let token = create_token(token_string);
+        assert!(token.is_none());
+    }
+
+    #[test]
+    fn create_tag_tokens() {
+        let sample_irc_message =
+            "@id=234AB;test=;keywithnovalue; :dan!d@localhost PRIVMSG #chan :Hey what's up!\r\n";
+        let (tag_string, _message) = get_tag_substring(sample_irc_message);
+
+        let tags = get_tags(tag_string);
+        assert_eq!(tags.len(), 3);
+        let IRCMessageToken::Tag(e1, v1) = tags[0];
+        assert_eq!(e1, "@id");
+        assert_eq!(v1, "234AB");
+        let IRCMessageToken::Tag(e2, v2) = tags[1];
+        assert_eq!(e2, "test");
+        assert_eq!(v2, "");
+        let IRCMessageToken::Tag(e3, v3) = tags[2];
+        assert_eq!(e3, "keywithnovalue");
+        assert_eq!(v3, "");
+    }
 }
